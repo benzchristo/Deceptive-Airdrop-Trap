@@ -26,49 +26,40 @@ contract DeceptiveAirdropTrap is ITrap {
     // This is set to 1000 tokens, assuming 18 decimals.
     uint256 public constant DEPOSIT_THRESHOLD = 1000 * 1e18;
 
-    // @dev A simple whitelist mapping. Only whitelisted addresses can operate the trap.
-    mapping(address => bool) public whitelist;
-
     // --- Trap Logic ---
 
     /// @notice The constructor is empty as per Drosera requirements.
-    /// Whitelist management must be handled externally or hardcoded.
-    constructor() {
-        // For testing, we can whitelist a default address.
-        // In a real scenario, this might be managed by a DAO or multisig.
-        whitelist[0x1804c8aB1f12e6bbF3894D4044f464a4a0386071] = true; // Example address
-    }
-
-    /// @notice Restricts function access to whitelisted operators.
-    modifier onlyWhitelisted() {
-        require(whitelist[msg.sender], "Not whitelisted");
-        _;
-    }
+    constructor() {}
 
     /// @notice Collects the balance of the legitimate token held by the honeypot contract.
     /// @return data The ABI-encoded token balance.
-    function collect() external view override onlyWhitelisted returns (bytes memory data) {
+    function collect() external view override returns (bytes memory data) {
+        // Guard against non-contract addresses to prevent reverts.
+        if (address(LEGITIMATE_TOKEN).code.length == 0) {
+            return abi.encode(uint256(0));
+        }
         uint256 honeypotBalance = LEGITIMATE_TOKEN.balanceOf(DECEPTIVE_AIRDROP_CONTRACT);
         return abi.encode(honeypotBalance);
     }
 
     /// @notice Determines if the amount of tokens deposited into the honeypot
     /// between two states has crossed the defined threshold.
-    /// @param data An array of collected data points (balances). We expect at least two.
+    /// @param data An array of collected data points (balances). In Drosera, data[0] is the newest.
     /// @return should A boolean indicating if a response should be sent.
     /// @return response The data to be sent to the response contract.
     function shouldRespond(bytes[] calldata data) external pure override returns (bool, bytes memory) {
         if (data.length < 2) {
-            return (false, "");
+            return (false, bytes(""));
         }
 
-        // Decode the balance from the pre-transaction state and post-transaction state.
-        uint256 balanceBefore = abi.decode(data[0], (uint256));
-        uint256 balanceAfter = abi.decode(data[data.length - 1], (uint256));
+        // Decode the balance from the newest and oldest states.
+        // data[0] is newest, data[data.length - 1] is oldest.
+        uint256 balanceAfter = abi.decode(data[0], (uint256));
+        uint256 balanceBefore = abi.decode(data[data.length - 1], (uint256));
 
         // Check if the balance has increased.
         if (balanceAfter <= balanceBefore) {
-            return (false, "");
+            return (false, bytes(""));
         }
 
         uint256 balanceIncrease = balanceAfter - balanceBefore;
@@ -83,6 +74,6 @@ contract DeceptiveAirdropTrap is ITrap {
             return (true, responseData);
         }
 
-        return (false, "");
+        return (false, bytes(""));
     }
 }

@@ -12,25 +12,25 @@ interface IDeceptiveAirdrop {
 /// @notice This contract is triggered by the DeceptiveAirdropTrap. Its purpose is to
 /// execute a response to rescue funds from the honeypot contract.
 contract AirdropResponse {
-    // --- Hardcoded Addresses ---
+    // --- State Variables ---
 
     // @dev The address of the deceptive airdrop contract (honeypot).
-    // This MUST match the address in the DeceptiveAirdropTrap contract.
     IDeceptiveAirdrop public DECEPTIVE_AIRDROP_CONTRACT = IDeceptiveAirdrop(0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF);
 
-    // @dev The address of the operator or a secure vault where rescued funds will be sent.
-    // TODO: Replace with a real, secure address.
-    address public constant OPERATOR = 0x1804c8aB1f12e6bbF3894D4044f464a4a0386071; // Example address
+    // @dev The trusted Drosera operator that is authorized to call executeResponse.
+    address public immutable guardian;
 
-    /// @notice The constructor is empty as per Drosera requirements.
-    constructor() {}
+    /// @notice Sets the guardian address upon deployment.
+    constructor(address _guardian) {
+        guardian = _guardian;
+    }
 
     /// @notice Executes the fund rescue operation.
-    /// This function is intended to be called by the Drosera network with data from the trap.
+    /// This function can only be called by the trusted guardian (Drosera operator).
     /// @param data The ABI-encoded data from the trap, containing the total token balance to rescue.
     function executeResponse(bytes calldata data) external {
-        // For security, ensure this function can only be called by a trusted Drosera operator.
-        // require(msg.sender == OPERATOR, "Unauthorized");
+        // Ensure this function can only be called by the trusted Drosera operator.
+        require(msg.sender == guardian, "AirdropResponse: Unauthorized caller");
 
         // Decode the amount to withdraw from the response data.
         (uint256 amountToWithdraw) = abi.decode(data, (uint256));

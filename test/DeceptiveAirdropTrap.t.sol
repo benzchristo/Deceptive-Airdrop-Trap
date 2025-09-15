@@ -28,10 +28,8 @@ contract DeceptiveAirdropTrapTest is Test {
         mockAirdrop = new MockDeceptiveAirdrop(address(mockToken));
 
         // Deploy the trap and response contracts
-        // We need to use `prank` to set the whitelisted operator during deployment
-        vm.prank(trapOperator);
         trap = new DeceptiveAirdropTrap();
-        response = new AirdropResponse();
+        response = new AirdropResponse(trapOperator); // Set operator as guardian
 
         // --- Replace hardcoded addresses in contracts ---
         // This is a common testing pattern when dealing with non-upgradeable contracts
@@ -76,24 +74,24 @@ contract DeceptiveAirdropTrapTest is Test {
         assertEq(balanceAfter, DEPOSIT_AMOUNT, "Honeypot balance should match deposit");
 
         // --- Step 4: Check if the trap should respond ---
+        // In Drosera, data[0] is the newest snapshot.
         bytes[] memory collectedData = new bytes[](2);
-        collectedData[0] = dataBefore;
-        collectedData[1] = dataAfter;
+        collectedData[0] = dataAfter;  // Newest
+        collectedData[1] = dataBefore; // Oldest
 
-        vm.prank(trapOperator);
         (bool should, bytes memory responseData) = trap.shouldRespond(collectedData);
         assertTrue(should, "Trap should have triggered");
 
         // --- Step 5: Execute the response ---
-        // The response contract calls `withdraw` on the mock airdrop.
-        // We need to prank as the response contract to check the withdrawal.
-        vm.prank(address(response));
+        // The response must be called by the guardian (trapOperator).
+        vm.prank(trapOperator);
         response.executeResponse(responseData);
 
         // --- Step 6: Verify the outcome ---
         // Check that the funds were rescued from the honeypot
         assertEq(mockToken.balanceOf(address(mockAirdrop)), 0, "Honeypot should be empty after response");
-        // Check that the response contract now holds the rescued funds
+        // Check that the operator's vault (in this case, the response contract) received the funds.
+        // In a real scenario, you'd likely transfer to a secure address from within the response.
         assertEq(mockToken.balanceOf(address(response)), DEPOSIT_AMOUNT, "Response contract should have the rescued funds");
     }
 }
